@@ -1,0 +1,21 @@
+{
+  "id": "./",
+  "name": "Calendario Hanon",
+  "short_name": "Hanon",
+  "description": "Calendario di studio Hanon con cronometri e salvataggio automatico.",
+  "lang": "it",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#f4f6f8",
+  "theme_color": "#202d46",
+  "icons": [
+    {
+      "src": "./icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Calendario Hanon</title>
+<link rel="manifest" href="./manifest.webmanifest">
+<meta name="theme-color" content="#202d46">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="icon" href="./icon.svg" type="image/svg+xml">
+
+<style>
+:root{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#20242a;background:#f4f6f8}
+body{margin:0;padding:16px;max-width:850px;margin-inline:auto}
+header{background:#202d46;color:white;border-radius:18px;padding:20px;margin-bottom:16px}
+h1{margin:0 0 6px;font-size:1.65rem} h2{font-size:1.15rem;margin:0 0 12px}
+p{line-height:1.45}.muted{color:#667085;font-size:.9rem}
+header .muted{color:#d8e1f1}
+.card{background:white;border:1px solid #e1e5eb;border-radius:16px;padding:16px;margin:12px 0;box-shadow:0 2px 8px #1720330a}
+.day{display:flex;align-items:center;gap:12px;padding:12px 0;border-bottom:1px solid #edf0f3}
+.day:last-child{border-bottom:0}.day input{width:22px;height:22px}
+.daymain{flex:1}.dayname{font-weight:750}.daymeta{font-size:.9rem;color:#667085;margin-top:3px}
+.pill{font-size:.78rem;padding:5px 9px;border-radius:999px;background:#edf2f7;white-space:nowrap}
+.pill.done{background:#dcfce7;color:#166534}
+.exercise{border:1px solid #e7eaf0;border-radius:12px;padding:12px;margin:10px 0}
+.exrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.exname{font-weight:700}.time{font-size:1.35rem;font-variant-numeric:tabular-nums;font-weight:800;letter-spacing:.04em}
+.buttons{display:flex;gap:7px;flex-wrap:wrap;margin-top:10px}
+button{border:0;border-radius:9px;padding:10px 13px;font-weight:700;background:#e9edf3;color:#263246}
+button.primary{background:#2357c6;color:white}button.reset{background:#fff0e8;color:#a53d0b}
+button:active{transform:scale(.98)}
+textarea{width:100%;box-sizing:border-box;border:1px solid #d6dce5;border-radius:10px;padding:11px;font:inherit;min-height:80px}
+.progress{height:8px;background:#e8edf2;border-radius:99px;overflow:hidden;margin:10px 0}.bar{height:100%;width:0;background:#24945a;transition:width .2s}
+.smallbtn{font-size:.85rem;padding:8px 10px}
+footer{padding:12px 4px 30px;color:#667085;font-size:.85rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎹 Calendario Hanon</h1>
+  <div class="muted">14–20 ottobre 2026 · Timer per esercizio · Salvataggio automatico su questo dispositivo</div>
+  <p>Avvia il cronometro dell’esercizio quando inizi. I tempi, le spunte e le note si salvano automaticamente nel browser.</p>
+</header>
+
+<section class="card">
+  <h2>Calendario settimanale</h2>
+  <div id="days"></div>
+  <p class="muted">Le spunte sono salvate automaticamente. Puoi correggerle in qualsiasi momento.</p>
+</section>
+
+<section class="card">
+  <h2 id="sessionTitle">Sessione Hanon</h2>
+  <p class="muted" id="sessionSubtitle">Seleziona un giorno dal calendario per vedere la sessione.</p>
+  <div id="exerciseList"></div>
+  <div class="progress"><div class="bar" id="progressBar"></div></div>
+  <div class="muted" id="progressText"></div>
+  <h2 style="margin-top:18px">Note della sessione</h2>
+  <textarea id="notes" placeholder="Metronomo, difficoltà, fluidità, osservazioni…"></textarea>
+  <p class="muted">Le note vengono salvate mentre scrivi.</p>
+</section>
+<section class="card">
+  <h2>Dati e backup</h2>
+  <p class="muted">I dati restano nel browser di questo dispositivo. Per conservarne una copia, esportali ogni tanto.</p>
+  <div class="buttons">
+    <button class="primary" id="export">Esporta backup JSON</button>
+    <button id="importBtn">Importa backup</button>
+    <button class="reset" id="clear">Azzera tutti i dati</button>
+  </div>
+  <input type="file" id="fileInput" accept=".json,application/json" hidden>
+  <p class="muted" id="backupStatus" aria-live="polite"></p>
+</section>
+<footer>Nota: il timer misura il tempo trascorso anche se cambi scheda o riapri la pagina, finché il timer è in esecuzione. Non può sapere se stai davvero suonando durante tutto quel tempo. I dati non vengono sincronizzati automaticamente con altri dispositivi.</footer>
+<script>
+const STORAGE_KEY = "calendario-hanon-v1";
+const week = [
+ {date:"2026-10-14",label:"Mercoledì 14 ottobre",minutes:25,desc:"Sessione già completata"},
+ {date:"2026-10-15",label:"Giovedì 15 ottobre",minutes:60,desc:"Sessione estesa"},
+ {date:"2026-10-16",label:"Venerdì 16 ottobre",minutes:40,desc:"Allenamento abituale"},
+ {date:"2026-10-17",label:"Sabato 17 ottobre",minutes:60,desc:"Sessione nel piano iniziale"},
+ {date:"2026-10-18",label:"Domenica 18 ottobre",minutes:25,desc:"Facoltativo"},
+ {date:"2026-10-19",label:"Lunedì 19 ottobre",minutes:40,desc:"Allenamento abituale"},
+ {date:"2026-10-20",label:"Martedì 20 ottobre",minutes:60,desc:"Sessione estesa"}
+];
+const thursday = [
+ {id:"1-5",name:"Hanon n. 1–5",minutes:10},
+ {id:"10-11",name:"Hanon n. 10–11",minutes:10},
+ {id:"29-30",name:"Hanon n. 29–30",minutes:10},
+ {id:"39",name:"Hanon n. 39",minutes:15},
+ {id:"41",name:"Hanon n. 41",minutes:10},
+ {id:"46",name:"Hanon n. 46",minutes:5}
+];
+const generic = [
+ {id:"warmup",name:"Riscaldamento e scioglimento",minutes:5},
+ {id:"1-5",name:"Hanon n. 1–5",minutes:8},
+ {id:"10-11",name:"Hanon n. 10–11",minutes:7},
+ {id:"29-30",name:"Hanon n. 29–30",minutes:7},
+ {id:"39",name:"Hanon n. 39",minutes:8},
+ {id:"41-46",name:"Hanon n. 41 e 46",minutes:5}
+];
+let selectedDate = "2026-10-15";
+let data = load();
+function blankDay(day){
+ const exs = day.date==="2026-10-15" ? thursday : generic;
+ return {checked: day.date==="2026-10-14",notes:"",timers:Object.fromEntries(exs.map(e=>[e.id,{elapsed:0,runningSince:null}]))};
+}
+function load(){
+ try { const v=JSON.parse(localStorage.getItem(STORAGE_KEY)||"{}"); if(v.days) return v; } catch(e){}
+ return {days:Object.fromEntries(week.map(d=>[d.date,blankDay(d)]))};
+}
+function ensureDay(date){
+ if(!data.days[date]) data.days[date]=blankDay(week.find(d=>d.date===date)||week[0]);
+ const def=blankDay(week.find(d=>d.date===date)||week[0]);
+ data.days[date].timers ||= def.timers;
+ for(const [id,t] of Object.entries(def.timers)) if(!data.days[date].timers[id]) data.days[date].timers[id]=t;
+ return data.days[date];
+}
+function save(){try{localStorage.setItem(STORAGE_KEY,JSON.stringify(data));}catch(e){document.getElementById("backupStatus").textContent="Impossibile salvare: esporta un backup e controlla lo spazio del browser."}}
+function elapsed(timer){return Math.max(0,(timer.elapsed||0)+(timer.runningSince?Math.floor((Date.now()-timer.runningSince)/1000):0))}
+function fmt(s){s=Math.floor(s);const h=Math.floor(s/3600),m=Math.floor(s%3600/60),sec=s%60;return h?`${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`:`${String(m).padStart(2,"0")}:${String(sec).padStart(2,"0")}`}
+function renderDays(){
+ const host=document.getElementById("days");host.innerHTML="";
+ week.forEach(day=>{
+  const d=ensureDay(day.date),row=document.createElement("div");row.className="day";
+  const cb=document.createElement("input");cb.type="checkbox";cb.checked=!!d.checked;cb.setAttribute("aria-label","Segna completata "+day.label);
+  cb.addEventListener("change",()=>{d.checked=cb.checked;save();renderDays()});
+  const main=document.createElement("div");main.className="daymain";
+  const name=document.createElement("div");name.className="dayname";name.textContent=day.label;
+  const meta=document.createElement("div");meta.className="daymeta";meta.textContent=`${day.minutes} minuti · ${day.desc}`;
+  main.append(name,meta);row.append(cb,main);
+  const pill=document.createElement("span");pill.className="pill"+(d.checked?" done":"");pill.textContent=d.checked?"Completato":(day.date===selectedDate?"Selezionato":"Da fare");
+  row.append(pill);row.addEventListener("click",e=>{if(e.target===cb)return;selectedDate=day.date;renderDays();renderSession()});
+  host.append(row);
+ });
+}
+function renderSession(){
+ const day=week.find(d=>d.date===selectedDate)||week[1],d=ensureDay(day.date);
+ document.getElementById("sessionTitle").textContent=day.label;
+ document.getElementById("sessionSubtitle").textContent=`Obiettivo: ${day.minutes} minuti · ${day.desc}`;
+ document.getElementById("notes").value=d.notes||"";
+ const list=document.getElementById("exerciseList");list.innerHTML="";
+ const exs=day.date==="2026-10-15"?thursday:generic;
+ exs.forEach(ex=>{
+  const t=d.timers[ex.id],card=document.createElement("div");card.className="exercise";
+  const row=document.createElement("div");row.className="exrow";
+  const name=document.createElement("div");name.className="exname";name.textContent=ex.name+` · obiettivo ${ex.minutes} min`;
+  const time=document.createElement("div");time.className="time";time.dataset.timer=ex.id;time.textContent=fmt(elapsed(t));
+  row.append(name,time);card.append(row);
+  const buttons=document.createElement("div");buttons.className="buttons";
+  const start=document.createElement("button");start.className="primary";start.textContent=t.runningSince?"In esecuzione":"Avvia";
+  start.disabled=!!t.runningSince;
+  start.addEventListener("click",()=>{t.runningSince=Date.now();save();renderSession();renderDays()});
+  const pause=document.createElement("button");pause.textContent="Pausa";pause.disabled=!t.runningSince;
+  pause.addEventListener("click",()=>{t.elapsed=elapsed(t);t.runningSince=null;save();renderSession();renderDays()});
+  const reset=document.createElement("button");reset.className="reset";reset.textContent="Azzera";
+  reset.addEventListener("click",()=>{t.elapsed=0;t.runningSince=null;save();renderSession();renderDays()});
+  buttons.append(start,pause,reset);card.append(buttons);list.append(card);
+ });
+ const all=exs.reduce((s,e)=>s+elapsed(d.timers[e.id]),0);
+ document.getElementById("progressBar").style.width=Math.min(100,all/(day.minutes*60)*100)+"%";
+ document.getElementById("progressText").textContent=`Tempo registrato nella sessione: ${fmt(all)} su ${day.minutes}:00 previsti.`;
+}
+document.getElementById("notes").addEventListener("input",e=>{ensureDay(selectedDate).notes=e.target.value;save()});
+document.getElementById("export").addEventListener("click",()=>{
+ save();const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+ a.href=url;a.download="backup-calendario-hanon.json";a.click();URL.revokeObjectURL(url);
+ document.getElementById("backupStatus").textContent="Backup esportato.";
+});
+document.getElementById("importBtn").addEventListener("click",()=>document.getElementById("fileInput").click());
+document.getElementById("fileInput").addEventListener("change",async e=>{
+ const f=e.target.files[0];if(!f)return;
+ try{const parsed=JSON.parse(await f.text());if(!parsed.days)throw Error();data=parsed;save();renderDays();renderSession();document.getElementById("backupStatus").textContent="Backup importato."}
+ catch(err){document.getElementById("backupStatus").textContent="File non valido: scegli un backup JSON del Calendario Hanon."}
+ e.target.value="";
+});
+document.getElementById("clear").addEventListener("click",()=>{
+ if(confirm("Vuoi davvero cancellare tutti i dati e i tempi salvati?")){data={days:Object.fromEntries(week.map(d=>[d.date,blankDay(d))])};save();renderDays();renderSession();document.getElementById("backupStatus").textContent="Dati azzerati."}
+});
+function tick(){
+ document.querySelectorAll("[data-timer]").forEach(el=>{
+  const t=ensureDay(selectedDate).timers[el.dataset.timer];if(t)el.textContent=fmt(elapsed(t));
+ });
+ const day=week.find(d=>d.date===selectedDate)||week[1],d=ensureDay(selectedDate),exs=day.date==="2026-10-15"?thursday:generic;
+ const all=exs.reduce((s,e)=>s+elapsed(d.timers[e.id]),0);
+ document.getElementById("progressBar").style.width=Math.min(100,all/(day.minutes*60)*100)+"%";
+ document.getElementById("progressText").textContent=`Tempo registrato nella sessione: ${fmt(all)} su ${day.minutes}:00 previsti.`;
+}
+renderDays();renderSession();setInterval(tick,500);
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)tick()});
+</script>
+
+<script>
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    navigator.serviceWorker.register("./sw.js").catch(() => {});
+  });
+}
+</script>
+</body>
+</html>
